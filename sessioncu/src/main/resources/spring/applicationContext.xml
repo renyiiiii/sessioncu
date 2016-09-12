@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:mvc="http://www.springframework.org/schema/mvc"
+	xmlns:aop="http://www.springframework.org/schema/aop"
+	xmlns:security="http://www.springframework.org/schema/security"
+	xmlns:oauth="http://www.springframework.org/schema/security/oauth2"
+	xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:jpa="http://www.springframework.org/schema/data/jpa"
+	xmlns:cache="http://www.springframework.org/schema/cache"
+	xmlns:jdbc="http://www.springframework.org/schema/jdbc"
+	xsi:schemaLocation="http://www.springframework.org/schema/jee http://www.springframework.org/schema/jee/spring-jee-4.1.xsd
+		http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-4.1.xsd
+		http://www.springframework.org/schema/security/oauth2 http://www.springframework.org/schema/security/spring-security-oauth2-2.0.xsd
+		http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc-4.1.xsd
+		http://www.springframework.org/schema/security http://www.springframework.org/schema/security/spring-security-3.2.xsd
+		http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.1.xsd
+		http://www.springframework.org/schema/data/jpa http://www.springframework.org/schema/data/jpa/spring-jpa-1.8.xsd
+		http://www.springframework.org/schema/cache http://www.springframework.org/schema/cache/spring-cache-4.1.xsd
+		http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-4.1.xsd
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-4.1.xsd
+		http://www.springframework.org/schema/jdbc
+	    http://www.springframework.org/schema/jdbc/spring-jdbc-4.2.xsd">
+	
+	<!-- 使Spring关注Annotation -->
+	<context:annotation-config />
+	
+	<!-- 让Spring通过自动扫描来查询和管理Bean -->
+	<context:component-scan base-package="com"></context:component-scan>
+	
+	<bean id="dataSource" class="org.h2.jdbcx.JdbcConnectionPool"
+		destroy-method="dispose">
+		<constructor-arg>
+			<bean class="org.h2.jdbcx.JdbcDataSource">
+				<!-- 内存模式 -->
+				<property name="URL" value="jdbc:h2:mem:test" />
+				<!-- 文件模式 -->
+				<!-- <property name="URL" value="jdbc:h2:testRestDB" /> -->
+				<property name="user" value="sa" />
+				<property name="password" value="sa" />
+			</bean>
+		</constructor-arg>
+	</bean>
+
+	<!-- 初始化数据表结构 -->
+	<jdbc:initialize-database data-source="dataSource"
+		ignore-failures="ALL">
+		<jdbc:script location="classpath:database/create-table.sql" />
+	</jdbc:initialize-database>
+	
+	
+
+   <bean class="org.springframework.session.data.redis.config.annotation.web.http.RedisHttpSessionConfiguration">
+        <property name="maxInactiveIntervalInSeconds" value="600"></property>
+   </bean>
+    
+    <bean id="poolConfig" class="redis.clients.jedis.JedisPoolConfig">  
+        <property name="maxIdle" value="600" />  
+        <property name="maxTotal" value="600" />  
+        <property name="minIdle" value="3000" />  
+    </bean>  
+      
+    <bean id="connectionFactory" class="org.springframework.data.redis.connection.jedis.JedisConnectionFactory">
+        <property name="hostName" value="172.18.1.34"/>
+        <property name="port" value="6379"/>
+        <property name="password" value="invoice2016"/>
+         <constructor-arg index="0" ref="poolConfig"/>
+        </bean>  
+      
+    <bean id="redisTemplate" class="org.springframework.data.redis.core.RedisTemplate">  
+        <property name="connectionFactory"   ref="connectionFactory" />  
+        <property name="keySerializer">
+         <bean class="org.springframework.data.redis.serializer.StringRedisSerializer"></bean></property>
+    </bean>         
+	
+	
+	   <security:http pattern="/resource/**" security="none"></security:http>
+     <security:http pattern="/index.jsp" security="none"></security:http>
+      <security:http pattern="/" security="none"></security:http>
+       <security:http pattern="/checkcode" security="none"></security:http>
+     <security:http  entry-point-ref="loginUrlAuthenticationEntryPoint" >
+        <security:intercept-url pattern="/role/user**" access="ROLE_USER"/>
+        <security:intercept-url pattern="/role/admin**" access="ROLE_ADMIN"/>
+        <security:intercept-url pattern="/role/manager**" access="ROLE_MANAGER"/>
+        <security:custom-filter ref="kdUsernamePasswordAuthenticationFilter" position="FORM_LOGIN_FILTER"/>
+		<security:custom-filter ref="logoutFilter" position="LOGOUT_FILTER"/>
+		<security:access-denied-handler ref="accessDeniedHandlerImpl"/>
+     </security:http> 
+   
+  
+     <bean id="accessDeniedHandlerImpl" class="org.springframework.security.web.access.AccessDeniedHandlerImpl">
+      <property name="errorPage" value="/errorPage.jsp"></property>
+     </bean>
+     <bean id="loginUrlAuthenticationEntryPoint" class="org.springframework.security.web.authentication.LoginUrlAuthenticationEntryPoint">
+	 <property name="loginFormUrl" value="/index.jsp"></property>
+	</bean>
+	
+    <bean id="kdUsernamePasswordAuthenticationFilter" class="com.test.hello.security.KdUsernamePasswordAuthenticationFilter">
+    <property name="authenticationManager" ref="org.springframework.security.authenticationManager"></property>
+    <property name="authenticationSuccessHandler" ref="savedRequestAwareAuthenticationSuccessHandler"></property>
+    <property name="authenticationFailureHandler" ref="simpleUrlAuthenticationFailureHandler"></property>
+    </bean>
+    
+    <bean id="savedRequestAwareAuthenticationSuccessHandler" class="com.test.hello.security.KdSavedRequestAwareAuthenticationSuccessHandler">
+    <property name="defaultTargetUrl" value="/loginSuccess"></property>
+    </bean>
+    <bean id="simpleUrlAuthenticationFailureHandler" class="com.test.hello.security.KdSimpleUrlAuthenticationFailureHandler">
+    <property name="defaultFailureUrl" value="/index.jsp"></property>
+    </bean>
+    
+    <bean id="logoutFilter" class="org.springframework.security.web.authentication.logout.LogoutFilter">
+    <property name="filterProcessesUrl" value="/logout"></property>
+    <constructor-arg index="0" >
+     <bean class="org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler">
+      <property name="defaultTargetUrl" value="/index.jsp"></property>
+     </bean>
+    </constructor-arg>
+    <constructor-arg index="1">
+      <array>
+        <bean class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler"></bean>
+      </array>
+    </constructor-arg>
+    </bean>
+     
+     
+      <bean id="org.springframework.security.authenticationManager" name="authenticationManager" class="org.springframework.security.authentication.ProviderManager" >  
+            <property name="authenticationEventPublisher" ref="defaultAuthenticationEventPublisher"></property>  
+            <property name="providers">  
+                <list>  
+                    <ref bean="daoAuthenticationProvider"/>  
+                    <ref bean="anonymousAuthenticationProvider"/>  
+                    <ref bean="kdDaoAuthenticationProvider"/>
+                </list>  
+            </property>  
+        </bean>  
+          
+        <bean id="defaultAuthenticationEventPublisher" class="org.springframework.security.authentication.DefaultAuthenticationEventPublisher"></bean>  
+          
+        <bean id="anonymousAuthenticationProvider" class="org.springframework.security.authentication.AnonymousAuthenticationProvider">  
+            <property name="key" value="work"></property>  
+        </bean>  
+          
+        <bean id="daoAuthenticationProvider" class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">  
+            <property name="userDetailsService" ref="userService"></property>  
+           <!--  <property name="passwordEncoder" ref="bcrypt"></property> -->
+        </bean>  
+        <bean id="userService" class="org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl">
+        <property name="dataSource" ref="dataSource"></property>
+        </bean>
+        
+        <bean id="kdDaoAuthenticationProvider" class="com.test.hello.security.KdDaoAuthenticationProvider">
+        <property name="userDetailsService" ref="kdJdbcDaoImpl"></property>
+        </bean>
+        
+        <bean id="kdJdbcDaoImpl" class="com.test.hello.security.KdJdbcDaoImpl">
+        <property name="dataSource" ref="dataSource"></property>
+        </bean>
+	
+   
+     
+	
+</beans>
